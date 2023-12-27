@@ -19,20 +19,12 @@
         request
         xmlgen
       ]);
-      libPath = pkgs.lib.makeLibraryPath [
-        pkgs.libGL
-        pkgs.xorg.libX11
-        pkgs.xorg.libXcursor
-        pkgs.xorg.libXi
-        pkgs.xorg.libXrandr
-        pkgs.xorg.libXtst
-      ];
       shell = pkgs.mkShell {
         NIX_HARDENING_ENABLE = "";
-        LD_LIBRARY_PATH = "./deps/raylib/lib:${libPath}";
         buildInputs = [
           emacs
           pkgs.libtool
+          pkgs.raylib
         ];
       };
     in {
