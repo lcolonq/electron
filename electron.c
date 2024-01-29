@@ -20,14 +20,20 @@ void electron_defun(emacs_env *env, const char *nm, const char *docs, ptrdiff_t 
 	env->funcall(env, env->intern(env, "defalias"), 2, args);
 }
 
-void electron_finalize_color(void *ptr) {
+void electron_finalize_generic(void *ptr) {
 	if (ptr) free(ptr);
 }
 
 emacs_value electron_make_color(emacs_env *env, Color c) {
 	Color *ret = calloc(1, sizeof(Color));
 	*ret = c;
-	return env->make_user_ptr(env, electron_finalize_color, ret);
+	return env->make_user_ptr(env, electron_finalize_generic, ret);
+}
+
+emacs_value electron_make_rectangle(emacs_env *env, Rectangle r) {
+	Rectangle *ret = calloc(1, sizeof(Rectangle));
+	*ret = r;
+	return env->make_user_ptr(env, electron_finalize_generic, ret);
 }
 
 void electron_finalize_texture(void *ptr) {
@@ -43,6 +49,32 @@ emacs_value electron_make_texture(emacs_env *env, Texture2D t) {
 	return env->make_user_ptr(env, electron_finalize_texture, ret);
 }
 
+void electron_finalize_rendertexture(void *ptr) {
+	if (ptr) {
+		UnloadRenderTexture(*(RenderTexture2D *) ptr);
+		free(ptr);
+	}
+}
+
+emacs_value electron_make_rendertexture(emacs_env *env, RenderTexture2D t) {
+	RenderTexture2D *ret = calloc(1, sizeof(RenderTexture2D));
+	*ret = t;
+	return env->make_user_ptr(env, electron_finalize_rendertexture, ret);
+}
+
+void electron_finalize_sound(void *ptr) {
+	if (ptr) {
+		UnloadSound(*(Sound *) ptr);
+		free(ptr);
+	}
+}
+
+emacs_value electron_make_sound(emacs_env *env, Sound t) {
+	Sound *ret = calloc(1, sizeof(Sound));
+	*ret = t;
+	return env->make_user_ptr(env, electron_finalize_sound, ret);
+}
+
 emacs_value electron__init_window(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
 	int64_t w = env->extract_integer(env, args[0]);
 	int64_t h = env->extract_integer(env, args[1]);
@@ -50,6 +82,11 @@ emacs_value electron__init_window(emacs_env *env, ptrdiff_t nargs, emacs_value *
 	ptrdiff_t len = sizeof(title);
 	env->copy_string_contents(env, args[2], title, &len);
 	InitWindow(w, h, title);
+	return env->intern(env, "nil");
+}
+
+emacs_value electron__init_audio_device(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	InitAudioDevice();
 	return env->intern(env, "nil");
 }
 
@@ -79,6 +116,14 @@ emacs_value electron__clear_background(emacs_env *env, ptrdiff_t nargs, emacs_va
 	return env->intern(env, "nil");
 }
 
+emacs_value electron__measure_text(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	char text[256];
+	ptrdiff_t len = sizeof(text);
+	env->copy_string_contents(env, args[0], text, &len);
+	int64_t sz = env->extract_integer(env, args[1]);
+	return env->make_integer(env, MeasureText(text, sz));
+}
+
 emacs_value electron__draw_text(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
 	char text[256];
 	ptrdiff_t len = sizeof(text);
@@ -99,11 +144,49 @@ emacs_value electron__make_color(emacs_env *env, ptrdiff_t nargs, emacs_value *a
 	return electron_make_color(env, (Color){r, g, b, a});
 }
 
+emacs_value electron__make_rectangle(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	float x = env->extract_float(env, args[0]);
+	float y = env->extract_float(env, args[1]);
+	float w = env->extract_float(env, args[2]);
+	float h = env->extract_float(env, args[3]);
+	return electron_make_rectangle(env, (Rectangle){x, y, w, h});
+}
+
 emacs_value electron__load_texture(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
 	char text[256];
 	ptrdiff_t len = sizeof(text);
 	env->copy_string_contents(env, args[0], text, &len);
 	return electron_make_texture(env, LoadTexture(text));
+}
+
+emacs_value electron__load_rendertexture(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	int64_t w = env->extract_integer(env, args[0]);
+	int64_t h = env->extract_integer(env, args[1]);
+	return electron_make_rendertexture(env, LoadRenderTexture(w, h));
+}
+
+emacs_value electron__load_sound(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	char text[256];
+	ptrdiff_t len = sizeof(text);
+	env->copy_string_contents(env, args[0], text, &len);
+	return electron_make_sound(env, LoadSound(text));
+}
+
+emacs_value electron__set_rendertexture_nearest(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	RenderTexture2D t = *(RenderTexture2D *) env->get_user_ptr(env, args[0]);
+	SetTextureFilter(t.texture, TEXTURE_FILTER_POINT);
+	return env->intern(env, "nil");
+}
+
+emacs_value electron__begin_texture_mode(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	RenderTexture2D t = *(RenderTexture2D *) env->get_user_ptr(env, args[0]);
+	BeginTextureMode(t);
+	return env->intern(env, "nil");
+}
+
+emacs_value electron__end_texture_mode(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	EndTextureMode();
+	return env->intern(env, "nil");
 }
 
 emacs_value electron__draw_texture(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
@@ -112,6 +195,21 @@ emacs_value electron__draw_texture(emacs_env *env, ptrdiff_t nargs, emacs_value 
 	int64_t y = env->extract_integer(env, args[2]);
 	Color color = *(Color *) env->get_user_ptr(env, args[3]);
 	DrawTexture(t, x, y, color);
+	return env->intern(env, "nil");
+}
+
+emacs_value electron__draw_rendertexture_src_dst(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	RenderTexture2D t = *(RenderTexture2D *) env->get_user_ptr(env, args[0]);
+	Rectangle src = *(Rectangle *) env->get_user_ptr(env, args[1]);
+	Rectangle dst = *(Rectangle *) env->get_user_ptr(env, args[2]);
+	Color color = *(Color *) env->get_user_ptr(env, args[3]);
+	DrawTexturePro(t.texture, src, dst, (Vector2){0, 0}, 0.0, color);
+	return env->intern(env, "nil");
+}
+
+emacs_value electron__play_sound(emacs_env *env, ptrdiff_t nargs, emacs_value *args, void *data) {
+	Sound t = *(Sound *) env->get_user_ptr(env, args[0]);
+	PlaySound(t);
 	return env->intern(env, "nil");
 }
 
@@ -142,15 +240,25 @@ int emacs_module_init(struct emacs_runtime *runtime) {
 	electron_defvar(env, "electron/color-green", electron_make_color(env, GREEN));
 	electron_defvar(env, "electron/color-blue", electron_make_color(env, BLUE));
 	electron_defun(env, "electron//init-window", "initialize window", 3, electron__init_window);
+	electron_defun(env, "electron//init-audio-device", "initialize audio", 0, electron__init_audio_device);
 	electron_defun(env, "electron//set-target-fps", "set target framerate", 1, electron__set_target_fps);
 	electron_defun(env, "electron//window-should-close", "check if the window should close", 0, electron__window_should_close);
 	electron_defun(env, "electron//begin-drawing", "begin drawing", 0, electron__begin_drawing);
 	electron_defun(env, "electron//end-drawing", "end drawing", 0, electron__end_drawing);
 	electron_defun(env, "electron//clear-background", "clear window background", 1, electron__clear_background);
 	electron_defun(env, "electron//draw-text", "draw text to window", 5, electron__draw_text);
+	electron_defun(env, "electron//measure-text", "return text width", 2, electron__measure_text);
 	electron_defun(env, "electron//make-color", "build an RGBA color", 4, electron__make_color);
+	electron_defun(env, "electron//make-rectangle", "build a rectangle", 4, electron__make_rectangle);
 	electron_defun(env, "electron//load-texture", "load a texture :3", 1, electron__load_texture);
+	electron_defun(env, "electron//load-sound", "load a sound :3", 1, electron__load_sound);
+	electron_defun(env, "electron//load-rendertexture", "make a new render texture", 2, electron__load_rendertexture);
+	electron_defun(env, "electron//set-rendertexture-nearest", "set the texture filter to nearest", 1, electron__set_rendertexture_nearest);
+	electron_defun(env, "electron//begin-texture-mode", "begin drawing to a rendertexture", 1, electron__begin_texture_mode);
+	electron_defun(env, "electron//end-texture-mode", "end drawing to a rendertexture", 0, electron__end_texture_mode);
 	electron_defun(env, "electron//draw-texture", "draw texture", 4, electron__draw_texture);
+	electron_defun(env, "electron//draw-rendertexture-src-dst", "draw texture with funny args", 4, electron__draw_rendertexture_src_dst);
+	electron_defun(env, "electron//play-sound", "play sound", 1, electron__play_sound);
 	electron_defun(env, "electron//is-key-pressed", "check if a key is pressed", 1, electron__is_key_pressed);
 	electron_defun(env, "electron//is-key-down", "check if a key is down", 1, electron__is_key_down);
 	electron_defun(env, "electron//is-key-up", "check if a key is up", 1, electron__is_key_up);
