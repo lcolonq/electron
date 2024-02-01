@@ -19,20 +19,36 @@
         request
         xmlgen
       ]);
+      deps = [
+        emacs
+        pkgs.libtool
+        pkgs.raylib
+      ];
       shell = pkgs.mkShell {
         NIX_HARDENING_ENABLE = "";
-        buildInputs = [
-          emacs
-          pkgs.libtool
-          pkgs.raylib
-        ];
+        buildInputs = deps;
       };
+      uwtrbtpimicasy-lib = pkgs.stdenv.mkDerivation {
+        name = "uwtrbtpimicasy";
+        src = ./.;
+        buildInputs = deps;
+        buildPhase = ''
+          make
+        '';
+        installPhase = ''
+          mkdir -p $out
+          cp -r assets $out
+          cp uwtrbtpimicasy.el electron.so $out
+        '';
+      };
+      uwtrbtpimicasy = pkgs.writeShellScriptBin "uwtrbtpimicasy" ''
+        ${emacs}/bin/emacs --batch --load="${uwtrbtpimicasy-lib}/electron.so" --load="${uwtrbtpimicasy-lib}/uwtrbtpimicasy.el"
+      '';
     in {
-      defaultPackage.x86_64-linux = shell;
+      devShells.x86_64-linux.default = shell;
       packages.x86_64-linux = {
-        inherit
-          shell
-        ;
+        inherit uwtrbtpimicasy-lib uwtrbtpimicasy;
+        default = uwtrbtpimicasy;
       };
     };
 }
